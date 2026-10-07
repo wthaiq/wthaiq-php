@@ -60,11 +60,19 @@
         "test:integration": "phpunit --testsuite integration",
         "analyse": "phpstan analyse --memory-limit=1G",
         "cs": "php-cs-fixer fix --dry-run --diff",
-        "cs:fix": "php-cs-fixer fix"
+        "cs:fix": "php-cs-fixer fix",
+        "analyse:max": "phpstan analyse src --level=max --memory-limit=1G"
     },
     "config": {
         "sort-packages": true
     },
     "minimum-stability": "stable",
-    "prefer-stable": true
+    "prefer-stable": true,
+    "extra": {
+        "phpstan": {
+            "includes": [
+                "extension.neon"
+            ]
+        }
+    }
 }
