@@ -1,0 +1,70 @@
+{
+    "name": "wthaiq/wthaiq-php",
+    "description": "Official PHP library for the Wthaiq e-signature API: signature requests, templates, sessions, embedded signing, evidence records and webhooks.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "wthaiq",
+        "e-signature",
+        "esignature",
+        "electronic signature",
+        "digital signature",
+        "signature request",
+        "contracts",
+        "api",
+        "sdk",
+        "webhooks"
+    ],
+    "homepage": "https://developers.wthaiq.com",
+    "authors": [
+        {
+            "name": "Wthaiq",
+            "email": "support@wthaiq.com"
+        }
+    ],
+    "support": {
+        "email": "support@wthaiq.com",
+        "docs": "https://developers.wthaiq.com/docs",
+        "issues": "https://github.com/wthaiq/wthaiq-php/issues",
+        "source": "https://github.com/wthaiq/wthaiq-php"
+    },
+    "require": {
+        "php": ">=8.1",
+        "ext-curl": "*",
+        "ext-json": "*"
+    },
+    "require-dev": {
+        "friendsofphp/php-cs-fixer": "^3.64",
+        "nyholm/psr7": "^1.8",
+        "phpstan/phpstan": "^2.0",
+        "phpunit/phpunit": "^10.5 || ^11.0",
+        "psr/http-client": "^1.0",
+        "psr/http-factory": "^1.0",
+        "psr/http-message": "^1.1 || ^2.0"
+    },
+    "suggest": {
+        "psr/http-client-implementation": "Use any PSR-18 HTTP client instead of the built-in cURL transport (see Wthaiq\\HttpClient\\Psr18Client)."
+    },
+    "autoload": {
+        "psr-4": {
+            "Wthaiq\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Wthaiq\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit --testsuite unit",
+        "test:integration": "phpunit --testsuite integration",
+        "analyse": "phpstan analyse --memory-limit=1G",
+        "cs": "php-cs-fixer fix --dry-run --diff",
+        "cs:fix": "php-cs-fixer fix"
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
