@@ -11,7 +11,7 @@ use Wthaiq\Util\Multipart;
 
 final class DocumentService extends AbstractService
 {
-    private const MAX_BYTES = 20 * 1024 * 1024;
+    private const MAX_BYTES = 10 * 1024 * 1024;
 
     /**
      * Uploads a PDF (`POST /documents`, multipart).
@@ -28,7 +28,7 @@ final class DocumentService extends AbstractService
     {
         [$content, $filename] = self::readFile($file);
         if (\strlen($content) > self::MAX_BYTES) {
-            throw new InvalidArgumentException('The file is larger than the 20 MB limit.');
+            throw new InvalidArgumentException('The file is larger than the 10 MB limit.');
         }
         if (!str_starts_with($content, '%PDF-')) {
             throw new InvalidArgumentException('The file must be a PDF.');
