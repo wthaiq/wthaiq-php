@@ -122,7 +122,8 @@ final class ClientTest extends TestCase
         $client->usage->retrieve();
         self::assertSame('en', $this->http->lastRequest()->getHeader('Accept-Language'));
         $client->signers->decideIdentityMatch('sgr_1', ['decision' => 'approve']);
-        self::assertSame('en', $this->http->lastRequest()->getHeader('Accept-Language'));
+        $decideRequest = $this->http->lastRequest();
+        self::assertSame('en', $decideRequest->getHeader('Accept-Language'));
 
         $client->usage->retrieve(['headers' => ['accept-language' => 'ar']]);
         $headers = $this->http->lastRequest()->headers;
