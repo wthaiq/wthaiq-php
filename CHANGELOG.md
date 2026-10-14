@@ -7,6 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `EventType::SIGNER_IDENTITY_MATCH_HOLD` (`signer.identity_match_hold`) and
+  `EventType::SIGNER_IDENTITY_MATCH_DECIDED` (`signer.identity_match_decided`): the name on the signer's identity
+  document differs from the name in the request, and the decision on that difference. `EventType::all()` now lists 21 types.
+
 ## [1.0.0] - 2026-10-07
 
 ### Added

@@ -24,6 +24,8 @@ final class EventType
     public const SIGNER_IDENTITY_IN_REVIEW = 'signer.identity_in_review';
     public const SIGNER_IDENTITY_RESUBMISSION_REQUESTED = 'signer.identity_resubmission_requested';
     public const SIGNER_IDENTITY_DECLINED = 'signer.identity_declined';
+    public const SIGNER_IDENTITY_MATCH_HOLD = 'signer.identity_match_hold';
+    public const SIGNER_IDENTITY_MATCH_DECIDED = 'signer.identity_match_decided';
     public const SIGNER_SIGNED = 'signer.signed';
     public const SIGNER_DECLINED = 'signer.declined';
     public const DOCUMENT_SEALED = 'document.sealed';

@@ -149,7 +149,9 @@ final class WebhookTest extends TestCase
     public function testEventTypeListMatchesThePlatform(): void
     {
         $types = EventType::all();
-        self::assertCount(19, $types);
+        self::assertCount(21, $types);
+        self::assertContains(EventType::SIGNER_IDENTITY_MATCH_HOLD, $types);
+        self::assertContains('signer.identity_match_decided', $types);
         self::assertContains('signer.identity_resubmission_requested', $types);
         self::assertContains('verification.created', $types);
         self::assertNotContains('*', $types);
