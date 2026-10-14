@@ -29,6 +29,7 @@ class PaymentRequiredException extends ApiException
         return $this->getErrorCode() === 'insufficient_balance';
     }
 
+    /** Where to buy, renew or upgrade the plan (`upgrade_url` from the error body), else {@see PLANS_URL}. */
     public function getUpgradeUrl(): string
     {
         $v = $this->getError()['upgrade_url'] ?? null;

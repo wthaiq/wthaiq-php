@@ -29,4 +29,21 @@ final class SignerService extends AbstractService
     {
         return $this->requestObject(SigningSession::class, 'POST', self::path('/signers/%s/signing_session', $id), $params, $options);
     }
+
+    /**
+     * Decides a name difference held for review (`identity->name_match->state === 'awaiting'`,
+     * announced by the `signer.identity_match_hold` event): `approve` lets the signer finish signing,
+     * `reject` stops this signer. Secret keys only.
+     *
+     * Throws {@see \Wthaiq\Exception\ConflictException} (`identity_match_not_pending`) when nothing
+     * awaits a decision, and {@see \Wthaiq\Exception\NotFoundException} when the signer has no name
+     * difference to decide.
+     *
+     * @param array{decision: 'approve'|'reject', note?: string}|array<string, mixed> $params
+     * @param array<string, mixed>|RequestOptions|null $options
+     */
+    public function decideIdentityMatch(string $id, array $params, array|RequestOptions|null $options = null): Signer
+    {
+        return $this->requestObject(Signer::class, 'POST', self::path('/signers/%s/identity_match', $id), $params, $options);
+    }
 }

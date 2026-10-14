@@ -85,6 +85,7 @@ $wthaiq = new \Wthaiq\Client('sk_test_...', [
     'connect_timeout' => 10,
     'max_retries'     => 2,         // automatic retries of transient failures
     'app_info'        => ['name' => 'AcmeCRM', 'version' => '4.2.0', 'url' => 'https://acme.example'],
+    'language'        => 'en',      // error messages in English; default: Arabic
 ]);
 
 // or a single array
@@ -100,6 +101,7 @@ $wthaiq = new \Wthaiq\Client(['api_key' => getenv('WTHAIQ_API_KEY'), 'max_retrie
 | `max_retries` | `2` | `0` disables retries |
 | `api_version` | `2026-07-01` | sent as `Wthaiq-Version` |
 | `app_info` | none | `name`, `version`, `url`, appended to the User-Agent |
+| `language` | none (Arabic) | language of error messages, sent as `Accept-Language`: `en` or `ar`; error codes never change |
 | `http_client` | `CurlClient` | any `Wthaiq\HttpClient\HttpClientInterface` |
 | `retry_policy` | `new RetryPolicy()` | backoff tuning |
 
@@ -125,7 +127,7 @@ $wthaiq->signatureRequests->create($params, [
 | `templates` | `create`, `retrieve`, `list`, `all` |
 | `signatureRequests` | `create`, `createBulk`, `retrieve`, `list`, `all`, `send`, `remind`, `cancel`, `listEvents`, `certificate`, `download`, `downloadPdf`, `downloadPdfTo`, `evidence` |
 | `sessions` | `create`, `retrieve`, `list`, `all` |
-| `signers` | `retrieve`, `createSigningSession` |
+| `signers` | `retrieve`, `createSigningSession`, `decideIdentityMatch` |
 | `documents` | `create`, `retrieve` |
 | `identityVerifications` | `retrieve` |
 | `verifications` | `retrieve` |
@@ -268,6 +270,28 @@ header('Location: ' . $session->signing_url);
 
 Return, success and cancel URLs must be on a domain you added and had accepted in the developer portal.
 
+#### Name on the identity document
+
+When the name on a signer's identity document differs from the name in the request, `identity.name_match`
+records it. With the account setting "hold signing until a decision" (the default), the
+`signer.identity_match_hold` event arrives, the state is `awaiting`, and signing waits for your decision
+(secret keys only):
+
+```php
+$match = $signer->getNameMatch();   // Wthaiq\Resource\NameMatch or null
+if ($match !== null && $match->isAwaitingDecision()) {
+    echo $match->expected_name, ' / ', $match->document_name;
+    $signer = $wthaiq->signers->decideIdentityMatch($signer->id, [
+        'decision' => 'approve',              // or 'reject' to stop this signer
+        'note'     => 'Confirmed by phone',   // optional, stored with the decision
+    ]);
+}
+```
+
+The decision triggers `signer.identity_match_decided`. In both events `$signer->getIdentityMatch()` returns the
+result that triggered the event. When nothing awaits a decision the call throws `ConflictException` with the code
+`identity_match_not_pending`. `NameMatch::STATE_*` and `NameMatch::VERDICT_*` list the possible values.
+
 ### Documents
 
 ```php
@@ -292,7 +316,8 @@ if ($lookup->isFound()) {
 }
 ```
 
-An unknown reference does not throw: `isFound()` returns false.
+An unknown reference does not throw: `isFound()` returns false. `$verification->getNameMatch()` returns the
+identity verification's name-match result, or null.
 
 ### Webhook endpoints and events
 
@@ -303,6 +328,7 @@ $endpoint = $wthaiq->webhookEndpoints->create([
 ]);
 $secret = $endpoint->secret;   // whsec_..., returned only now: store it
 
+foreach ($wthaiq->webhookEndpoints->all(['limit' => 100]) as $item) { /* every page */ }
 $wthaiq->webhookEndpoints->update($endpoint->id, ['status' => 'disabled']);
 $wthaiq->webhookEndpoints->deliveries($endpoint->id);
 $wthaiq->webhookEndpoints->test($endpoint->id);
@@ -378,9 +404,10 @@ Every exception implements `Wthaiq\Exception\ExceptionInterface`.
 | Exception | When |
 |---|---|
 | `ValidationException` | 400: a parameter is missing or invalid (`getParam()`, `getFieldErrors()`) |
+| `TooManySignersException` | 400 `too_many_signers` (a `ValidationException`): more signers than `getMaxSigners()` (5) in one request |
 | `AuthenticationException` | 401: missing, invalid or revoked key |
-| `PaymentRequiredException` | 402: `plan_required`, `plan_expired`, `insufficient_balance` |
-| `PermissionException` | 403: `plan_feature_unavailable` (`getFeature()`, `getRequiredPlan()`, `getUpgradeUrl()`), `kyb_required`, `forbidden`, `ip_not_allowed` |
+| `PaymentRequiredException` | 402: `plan_required`, `plan_expired`, `insufficient_balance` (`getUpgradeUrl()`) |
+| `PermissionException` | 403: `plan_feature_unavailable` (`getFeature()`, `getRequiredPlan()`, `getUpgradeUrl()`), `kyb_required` (`getVerifyUrl()`), `forbidden`, `ip_not_allowed` |
 | `NotFoundException` | 404 |
 | `ConflictException` | 409: `request_not_cancelable`, `pdf_not_ready`, `idempotency_key_reused`, … |
 | `InvalidRequestException` | other 4xx (parent of the three above) |
@@ -396,13 +423,17 @@ use Wthaiq\Exception;
 
 try {
     $wthaiq->signatureRequests->create($params);
+} catch (Exception\TooManySignersException $e) {
+    echo 'At most ', $e->getMaxSigners(), ' signers per request: split them over several requests';
 } catch (Exception\ValidationException $e) {
     echo 'Invalid field ', $e->getParam(), ': ', $e->getMessage();
 } catch (Exception\PaymentRequiredException $e) {
     echo 'Top up or upgrade: ', $e->getUpgradeUrl();
 } catch (Exception\PermissionException $e) {
-    if ($e->isPlanFeatureUnavailable()) {
-        echo $e->getFeature(), ' needs plan ', $e->getRequiredPlan();
+    if ($e->isKybRequired()) {
+        echo 'Verify your company first: ', $e->getVerifyUrl();
+    } elseif ($e->isPlanFeatureUnavailable()) {
+        echo $e->getFeature(), ' needs plan ', $e->getRequiredPlan(), ': ', $e->getUpgradeUrl();
     }
 } catch (Exception\ApiException $e) {
     error_log(sprintf('Wthaiq %d %s (%s)', $e->getHttpStatus(), $e->getErrorCode(), $e->getRequestId()));
@@ -411,8 +442,8 @@ try {
 }
 ```
 
-Branch on `getErrorCode()`, not on the message: messages are human-readable text (currently in Arabic) and may
-change. Quote `getRequestId()` when you contact support.
+Branch on `getErrorCode()`, not on the message: messages are human-readable text (Arabic, or English with the
+`language => 'en'` client option) and may change. Quote `getRequestId()` when you contact support.
 
 ## Retries and idempotency
 

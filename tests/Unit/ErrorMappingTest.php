@@ -15,6 +15,7 @@ use Wthaiq\Exception\PaymentRequiredException;
 use Wthaiq\Exception\PermissionException;
 use Wthaiq\Exception\RateLimitException;
 use Wthaiq\Exception\ServerException;
+use Wthaiq\Exception\TooManySignersException;
 use Wthaiq\Exception\UnexpectedResponseException;
 use Wthaiq\Exception\ValidationException;
 use Wthaiq\HttpClient\HttpResponse;
@@ -115,6 +116,92 @@ final class ErrorMappingTest extends TestCase
                 self::assertTrue($e->{$method}());
                 self::assertSame(PaymentRequiredException::PLANS_URL, $e->getUpgradeUrl());
             }
+        }
+    }
+
+    public function testTooManySignersIsTypedAndCarriesTheLimit(): void
+    {
+        $client = $this->client([
+            self::error(400, 'invalid_request_error', 'too_many_signers', 'signers', ['max_signers' => 5]),
+            self::error(400, 'invalid_request_error', 'too_many_signers', 'signers', ['max_signers' => 3]),
+            self::error(400, 'invalid_request_error', 'too_many_signers', 'signers'),
+            self::error(400, 'invalid_request_error', 'too_many_signers', 'signers', ['max_signers' => '5']),
+            self::error(400, 'invalid_request_error', 'test_signer_limit', 'signers'),
+        ]);
+        $limits = [];
+        for ($i = 0; $i < 4; ++$i) {
+            try {
+                $client->signatureRequests->create(['source' => [], 'signers' => []]);
+                self::fail('Expected TooManySignersException');
+            } catch (TooManySignersException $e) {
+                self::assertInstanceOf(ValidationException::class, $e);
+                self::assertSame('too_many_signers', $e->getErrorCode());
+                self::assertSame(['signers' => 'Error message for too_many_signers'], $e->getFieldErrors());
+                $limits[] = $e->getMaxSigners();
+            }
+        }
+        self::assertSame([5, 3, TooManySignersException::MAX_SIGNERS, TooManySignersException::MAX_SIGNERS], $limits);
+        self::assertSame(5, TooManySignersException::MAX_SIGNERS);
+        try {
+            $client->signatureRequests->create(['source' => [], 'signers' => []]);
+            self::fail('Expected ValidationException');
+        } catch (ValidationException $e) {
+            self::assertNotInstanceOf(TooManySignersException::class, $e);
+        }
+    }
+
+    public function testPlanAndKybErrorsUseTheUrlsSentByTheApi(): void
+    {
+        $plans = 'https://developers.wthaiq.com/plans';
+        $verify = 'https://developers.wthaiq.com/verify';
+        $client = $this->client([
+            self::error(402, 'quota_error', 'plan_required', null, ['upgrade_url' => $plans . '?from=required']),
+            self::error(402, 'quota_error', 'plan_expired', null, ['upgrade_url' => $plans . '?from=expired']),
+            self::error(403, 'permission_error', 'kyb_required', null, ['verify_url' => $verify . '?step=2']),
+            self::error(403, 'permission_error', 'plan_feature_unavailable', 'mode', ['feature' => 'embed', 'required_plan' => 'ap_biz', 'upgrade_url' => $plans]),
+            self::error(403, 'invalid_request_error', 'forbidden'),
+        ]);
+        foreach (['required', 'expired'] as $which) {
+            try {
+                $client->signatureRequests->send('sr_x');
+                self::fail('Expected PaymentRequiredException');
+            } catch (PaymentRequiredException $e) {
+                self::assertSame($plans . '?from=' . $which, $e->getUpgradeUrl());
+            }
+        }
+        try {
+            $client->signatureRequests->send('sr_x');
+            self::fail('Expected PermissionException');
+        } catch (PermissionException $e) {
+            self::assertTrue($e->isKybRequired());
+            self::assertSame($verify . '?step=2', $e->getVerifyUrl());
+            self::assertSame($verify . '?step=2', $e->getUpgradeUrl());
+        }
+        try {
+            $client->signers->createSigningSession('sgr_1');
+            self::fail('Expected PermissionException');
+        } catch (PermissionException $e) {
+            self::assertSame($plans, $e->getUpgradeUrl());
+            self::assertNull($e->getVerifyUrl());
+            self::assertSame('ap_biz', $e->getRequiredPlan());
+        }
+        try {
+            $client->account->retrieve();
+            self::fail('Expected PermissionException');
+        } catch (PermissionException $e) {
+            self::assertNull($e->getVerifyUrl());
+            self::assertNull($e->getUpgradeUrl());
+        }
+    }
+
+    public function testKybRequiredWithoutAUrlFallsBackToTheVerificationPage(): void
+    {
+        $client = $this->client([self::error(403, 'permission_error', 'kyb_required')]);
+        try {
+            $client->signatureRequests->send('sr_x');
+            self::fail('Expected PermissionException');
+        } catch (PermissionException $e) {
+            self::assertSame(PermissionException::VERIFY_URL, $e->getVerifyUrl());
         }
     }
 

@@ -13,6 +13,7 @@ use Wthaiq\Exception\PaymentRequiredException;
 use Wthaiq\Exception\PermissionException;
 use Wthaiq\Exception\RateLimitException;
 use Wthaiq\Exception\ServerException;
+use Wthaiq\Exception\TooManySignersException;
 use Wthaiq\Exception\ValidationException;
 use Wthaiq\HttpClient\HttpResponse;
 
@@ -64,6 +65,7 @@ final class ErrorFactory
 
         $status = $response->status;
         $class = match (true) {
+            $status === 400 && $code === 'too_many_signers' => TooManySignersException::class,
             $status === 400 => ValidationException::class,
             $status === 401 => AuthenticationException::class,
             $status === 402 => PaymentRequiredException::class,

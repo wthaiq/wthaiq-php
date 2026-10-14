@@ -37,6 +37,8 @@ use Wthaiq\Service\WebhookEndpointService;
  * - `max_retries` (int): automatic retries of transient failures, default 2
  * - `api_version` (string): sent as `Wthaiq-Version`, default {@see self::API_VERSION}
  * - `app_info` (array{name: string, version?: string, url?: string}): appended to the User-Agent
+ * - `language` (string): language of the API's error messages, sent as `Accept-Language`:
+ *   `en` for English or `ar` for Arabic. Default: no header, and the API answers in Arabic.
  * - `http_client` ({@see HttpClientInterface}): transport, default {@see CurlClient}
  * - `retry_policy` ({@see RetryPolicy}): backoff settings
  */
@@ -46,7 +48,7 @@ final class Client
     public const API_VERSION = '2026-07-01';
     public const DEFAULT_BASE_URL = 'https://wthaiq.com/api/v1';
 
-    private const OPTIONS = ['api_key', 'base_url', 'timeout', 'connect_timeout', 'max_retries', 'api_version', 'app_info', 'http_client', 'retry_policy'];
+    private const OPTIONS = ['api_key', 'base_url', 'timeout', 'connect_timeout', 'max_retries', 'api_version', 'app_info', 'language', 'http_client', 'retry_policy'];
 
     public readonly AccountService $account;
     public readonly UsageService $usage;
@@ -90,6 +92,10 @@ final class Client
         if (!\is_string($apiVersion) || $apiVersion === '') {
             throw new InvalidArgumentException('api_version must be a non-empty string.');
         }
+        $language = $config['language'] ?? null;
+        if ($language !== null && (!\is_string($language) || !preg_match('/^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$/', $language))) {
+            throw new InvalidArgumentException('language must be a language tag such as \'en\' or \'ar\'.');
+        }
         $httpClient = $config['http_client'] ?? new CurlClient();
         if (!$httpClient instanceof HttpClientInterface) {
             throw new InvalidArgumentException('http_client must implement ' . HttpClientInterface::class . '.');
@@ -109,6 +115,7 @@ final class Client
             $apiVersion,
             self::userAgent($config['app_info'] ?? null),
             $retryPolicy,
+            $language,
         );
 
         $this->account = new AccountService($this->requestor);

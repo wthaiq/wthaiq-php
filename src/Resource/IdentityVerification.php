@@ -14,9 +14,18 @@ namespace Wthaiq\Resource;
  * @property-read string      $status           `pending`, `approved`, `in_review`, `resubmission_requested`, `declined` or `expired`
  * @property-read string      $level            `aes`
  * @property-read string|null $verification_url
+ * @property-read WthaiqObject|null $name_match  See {@see getNameMatch()}
  * @property-read int|null    $created_at
  */
 class IdentityVerification extends WthaiqObject
 {
     public const OBJECT_NAME = 'identity_verification';
+
+    /** The name-match result of this verification, or null. */
+    public function getNameMatch(): ?NameMatch
+    {
+        $match = $this->offsetGet('name_match');
+
+        return $match instanceof WthaiqObject ? NameMatch::fromObject($match) : null;
+    }
 }

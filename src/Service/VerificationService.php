@@ -15,7 +15,8 @@ final class VerificationService extends AbstractService
     /**
      * Looks up a verification reference such as `WTQ-1A2B3C4D5E6F`.
      *
-     * An unknown reference does not throw: the result has `found === false` and `status === 'not_found'`.
+     * An unknown reference does not throw: the result has `found === false` and `status === 'not_found'`,
+     * whether the API answers 404 with a verification body or with the error code `not_found`.
      *
      * @param array<string, mixed>|RequestOptions|null $options
      */
@@ -30,6 +31,15 @@ final class VerificationService extends AbstractService
                 $object = ObjectFactory::fromResponse($response);
 
                 return $object instanceof Verification ? $object : Verification::fromObject($object);
+            }
+            if ($e->getErrorCode() === 'not_found') {
+                return Verification::constructFrom([
+                    'object' => 'verification',
+                    'reference' => $reference,
+                    'found' => false,
+                    'status' => 'not_found',
+                    'integrity' => 'unknown',
+                ], $response);
             }
             throw $e;
         }

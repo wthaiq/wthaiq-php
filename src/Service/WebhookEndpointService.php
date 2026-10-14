@@ -56,7 +56,10 @@ final class WebhookEndpointService extends AbstractService
     }
 
     /**
-     * @param array{limit?: int}|array<string, mixed>    $params
+     * One page of endpoints, newest first. Pass `starting_after` (the previous page's `next_cursor`)
+     * for the next page, or use {@see all()} to walk every page.
+     *
+     * @param array{limit?: int, starting_after?: string}|array<string, mixed> $params
      * @param array<string, mixed>|RequestOptions|null $options
      *
      * @return Collection<WebhookEndpoint>

@@ -8,7 +8,8 @@ namespace Wthaiq\Exception;
  * The API returned an HTTP error. Carries everything the API said about it.
  *
  * Branch on {@see getErrorCode()} (stable machine codes such as `parameter_missing`
- * or `insufficient_balance`). The message is human-readable text and may change.
+ * or `insufficient_balance`). The message is human-readable text and may change: Arabic by
+ * default, English with the client option `language => 'en'`. Codes never change with the language.
  */
 class ApiException extends WthaiqException
 {

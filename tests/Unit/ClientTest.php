@@ -54,6 +54,9 @@ final class ClientTest extends TestCase
             ['retry_policy' => 'fast'],
             ['api_version' => ''],
             ['app_info' => ['version' => '1']],
+            ['language' => ''],
+            ['language' => 'en us'],
+            ['language' => 1],
         ] as $options) {
             try {
                 new Client(self::KEY, $options);
@@ -100,6 +103,36 @@ final class ClientTest extends TestCase
 
         $client->usage->retrieve(['timeout' => 2]);
         self::assertSame(2.0, $this->http->lastRequest()->timeout);
+    }
+
+    public function testNoAcceptLanguageHeaderByDefault(): void
+    {
+        $client = $this->client([self::json(200, ['object' => 'usage'])]);
+        $client->usage->retrieve();
+        self::assertNull($this->http->lastRequest()->getHeader('Accept-Language'));
+    }
+
+    public function testLanguageOptionIsSentAsAcceptLanguage(): void
+    {
+        $client = $this->client([
+            self::json(200, ['object' => 'usage']),
+            self::json(200, ['id' => 'sgr_1', 'object' => 'signer']),
+            self::json(200, ['object' => 'usage']),
+        ], ['language' => 'en']);
+        $client->usage->retrieve();
+        self::assertSame('en', $this->http->lastRequest()->getHeader('Accept-Language'));
+        $client->signers->decideIdentityMatch('sgr_1', ['decision' => 'approve']);
+        self::assertSame('en', $this->http->lastRequest()->getHeader('Accept-Language'));
+
+        $client->usage->retrieve(['headers' => ['accept-language' => 'ar']]);
+        $headers = $this->http->lastRequest()->headers;
+        self::assertSame('ar', $this->http->lastRequest()->getHeader('Accept-Language'));
+        self::assertCount(1, array_filter(array_keys($headers), static fn (string $k): bool => strcasecmp($k, 'Accept-Language') === 0));
+
+        $ar = $this->client([self::json(200, ['object' => 'usage'])], ['language' => 'ar']);
+        $ar->usage->retrieve();
+        self::assertSame('ar', $this->http->lastRequest()->getHeader('Accept-Language'));
+        self::assertTrue((new Client(self::KEY, ['language' => 'en-GB', 'http_client' => new MockHttpClient()]))->isTestMode());
     }
 
     public function testCustomApiVersion(): void

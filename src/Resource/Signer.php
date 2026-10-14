@@ -21,8 +21,9 @@ namespace Wthaiq\Resource;
  * @property-read int|null          $viewed_at
  * @property-read int|null          $signed_at
  * @property-read WthaiqObject      $fields
- * @property-read WthaiqObject|null $identity         `status`, `provider`, `level`, `verification_id`, `reason_code`, `updated_at`, `resubmit_steps`
+ * @property-read WthaiqObject|null $identity         `status`, `provider`, `level`, `verification_id`, `reason_code`, `updated_at`, `resubmit_steps`, `name_match` (see {@see getNameMatch()})
  * @property-read string|null       $signature_request Only inside webhook events
+ * @property-read WthaiqObject|null $identity_match   Only inside `signer.identity_match_*` events (see {@see getIdentityMatch()})
  */
 class Signer extends WthaiqObject
 {
@@ -35,4 +36,21 @@ class Signer extends WthaiqObject
     public const STATUS_IDENTITY_VERIFIED = 'identity_verified';
     public const STATUS_SIGNED = 'signed';
     public const STATUS_DECLINED = 'declined';
+
+    /** The name-match result (`identity.name_match`), or null when none was recorded. */
+    public function getNameMatch(): ?NameMatch
+    {
+        $identity = $this->offsetGet('identity');
+        $match = $identity instanceof WthaiqObject ? $identity['name_match'] : null;
+
+        return $match instanceof WthaiqObject ? NameMatch::fromObject($match) : null;
+    }
+
+    /** The name-match result that triggered a `signer.identity_match_*` event (`identity_match`). */
+    public function getIdentityMatch(): ?NameMatch
+    {
+        $match = $this->offsetGet('identity_match');
+
+        return $match instanceof WthaiqObject ? NameMatch::fromObject($match) : null;
+    }
 }

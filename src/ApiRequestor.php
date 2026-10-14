@@ -29,6 +29,7 @@ final class ApiRequestor
         private readonly string $apiVersion,
         private readonly string $userAgent,
         private readonly RetryPolicy $retryPolicy,
+        private readonly ?string $language = null,
     ) {
     }
 
@@ -79,12 +80,20 @@ final class ApiRequestor
             'User-Agent' => $this->userAgent,
             'Wthaiq-Version' => $this->apiVersion,
         ] + $headers;
+        if ($this->language !== null) {
+            $headers['Accept-Language'] = $this->language;
+        }
         if ($method === 'POST') {
             $headers['Idempotency-Key'] = $options->idempotencyKey ?? Uuid::v4();
         }
         foreach ($options->headers as $name => $value) {
             if (strcasecmp($name, 'Authorization') === 0) {
                 throw new InvalidArgumentException('Use the api_key option instead of an Authorization header.');
+            }
+            foreach (array_keys($headers) as $existing) {
+                if (strcasecmp($existing, $name) === 0) {
+                    unset($headers[$existing]);
+                }
             }
             $headers[$name] = $value;
         }

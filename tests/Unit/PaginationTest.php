@@ -46,6 +46,30 @@ final class PaginationTest extends TestCase
         ], $urls);
     }
 
+    public function testWebhookEndpointsWalkEveryPage(): void
+    {
+        $endpoint = static fn (string $id): array => ['id' => $id, 'object' => 'webhook_endpoint'];
+        $client = $this->client([
+            self::json(200, ['object' => 'list', 'data' => [$endpoint('we_3'), $endpoint('we_2')], 'has_more' => true, 'next_cursor' => 'we_2']),
+            self::json(200, ['object' => 'list', 'data' => [$endpoint('we_1')], 'has_more' => false, 'next_cursor' => null]),
+            self::json(200, ['object' => 'list', 'data' => [$endpoint('we_1')], 'has_more' => false, 'next_cursor' => null]),
+        ]);
+        $ids = [];
+        foreach ($client->webhookEndpoints->all(['limit' => 2]) as $item) {
+            self::assertInstanceOf(\Wthaiq\Resource\WebhookEndpoint::class, $item);
+            $ids[] = $item->id;
+        }
+        self::assertSame(['we_3', 'we_2', 'we_1'], $ids);
+        self::assertSame([
+            'https://wthaiq.com/api/v1/webhook_endpoints?limit=2',
+            'https://wthaiq.com/api/v1/webhook_endpoints?limit=2&starting_after=we_2',
+        ], array_map(static fn (HttpRequest $r): string => $r->url, $this->http->requests));
+
+        $page = $client->webhookEndpoints->list(['limit' => 1, 'starting_after' => 'we_2']);
+        self::assertFalse($page->hasMore());
+        self::assertSame('https://wthaiq.com/api/v1/webhook_endpoints?limit=1&starting_after=we_2', $this->http->lastRequest()->url);
+    }
+
     public function testAllIsLazy(): void
     {
         $client = $this->client([self::page(['sr_1', 'sr_2'], true, 'sr_2')]);

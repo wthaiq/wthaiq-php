@@ -32,7 +32,10 @@ class PermissionException extends ApiException
         return is_string($v) && $v !== '' ? $v : null;
     }
 
-    /** Where to upgrade (plan errors) or verify the company (`kyb_required`). */
+    /**
+     * Where to upgrade the plan (`upgrade_url`). For `kyb_required` it returns {@see getVerifyUrl()},
+     * so that one method always points to the page that unblocks the call.
+     */
     public function getUpgradeUrl(): ?string
     {
         $v = $this->getError()['upgrade_url'] ?? null;
@@ -40,10 +43,21 @@ class PermissionException extends ApiException
             return $v;
         }
         if ($this->isKybRequired()) {
-            return self::VERIFY_URL;
+            return $this->getVerifyUrl();
         }
 
         return $this->isPlanFeatureUnavailable() ? self::PLANS_URL : null;
+    }
+
+    /** Where to verify the company (`verify_url`, with `kyb_required`), or null for other codes. */
+    public function getVerifyUrl(): ?string
+    {
+        $v = $this->getError()['verify_url'] ?? null;
+        if (is_string($v) && $v !== '') {
+            return $v;
+        }
+
+        return $this->isKybRequired() ? self::VERIFY_URL : null;
     }
 
     public function isPlanFeatureUnavailable(): bool

@@ -46,6 +46,8 @@ final class ServicesTest extends TestCase
         yield 'sessions.list' => [fn (Client $c) => $c->sessions->list(['vendor_data' => 'u-1']), 'GET', '/sessions?vendor_data=u-1', null, $list(['id' => 'sr_1', 'object' => 'session']), Resource\Collection::class];
 
         yield 'signers.retrieve' => [fn (Client $c) => $c->signers->retrieve('sgr_1'), 'GET', '/signers/sgr_1', null, ['id' => 'sgr_1', 'object' => 'signer'], Resource\Signer::class];
+        yield 'signers.decideIdentityMatch' => [fn (Client $c) => $c->signers->decideIdentityMatch('sgr_1', ['decision' => 'approve', 'note' => 'Checked by phone']), 'POST', '/signers/sgr_1/identity_match', ['decision' => 'approve', 'note' => 'Checked by phone'], ['id' => 'sgr_1', 'object' => 'signer'], Resource\Signer::class];
+        yield 'signers.decideIdentityMatch (reject)' => [fn (Client $c) => $c->signers->decideIdentityMatch('sgr_1', ['decision' => 'reject']), 'POST', '/signers/sgr_1/identity_match', ['decision' => 'reject'], ['id' => 'sgr_1', 'object' => 'signer'], Resource\Signer::class];
         yield 'signers.createSigningSession' => [fn (Client $c) => $c->signers->createSigningSession('sgr_1', ['mode' => 'redirect', 'success_url' => 'https://acme.example/done']), 'POST', '/signers/sgr_1/signing_session', ['mode' => 'redirect', 'success_url' => 'https://acme.example/done'], ['object' => 'signing_session', 'signer' => 'sgr_1'], Resource\SigningSession::class];
 
         yield 'documents.retrieve' => [fn (Client $c) => $c->documents->retrieve('doc_1'), 'GET', '/documents/doc_1', null, ['id' => 'doc_1', 'object' => 'document'], Resource\Document::class];
@@ -131,6 +133,75 @@ final class ServicesTest extends TestCase
         self::assertFalse($verification->isFound());
         self::assertSame('not_found', $verification->status);
         self::assertSame(404, $verification->getLastResponse()?->status);
+    }
+
+    public function testNotFoundErrorCodeReturnsANotFoundVerification(): void
+    {
+        $client = $this->client([self::error(404, 'invalid_request_error', 'not_found')]);
+        $verification = $client->verifications->retrieve('WTQ-NOPE');
+
+        self::assertInstanceOf(Resource\Verification::class, $verification);
+        self::assertFalse($verification->isFound());
+        self::assertSame(['object' => 'verification', 'reference' => 'WTQ-NOPE', 'found' => false, 'status' => 'not_found', 'integrity' => 'unknown'], $verification->toArray());
+        self::assertSame(404, $verification->getLastResponse()?->status);
+    }
+
+    public function testDecideIdentityMatchReturnsTheSignerWithItsNameMatch(): void
+    {
+        $nameMatch = [
+            'state' => 'approved', 'verdict' => 'major', 'expected_name' => 'Noha Ahmed Ali', 'document_name' => 'Nuha Ahmad Aly',
+            'document_type' => 'Identity Card', 'country' => 'EGY', 'id_last4' => '1234', 'decided_by' => 'API',
+            'decided_at' => 1791353999, 'deadline' => 1791958089,
+        ];
+        $client = $this->client([self::json(200, [
+            'id' => 'sgr_1', 'object' => 'signer', 'require_identity' => true,
+            'identity' => ['status' => 'approved', 'provider' => 'external', 'level' => 'aes', 'name_match' => $nameMatch],
+        ])]);
+        $signer = $client->signers->decideIdentityMatch('sgr_1', ['decision' => 'approve']);
+        $match = $signer->getNameMatch();
+
+        self::assertInstanceOf(Resource\NameMatch::class, $match);
+        self::assertSame(Resource\NameMatch::STATE_APPROVED, $match->state);
+        self::assertSame(Resource\NameMatch::VERDICT_MAJOR, $match->verdict);
+        self::assertSame('API', $match->decided_by);
+        self::assertFalse($match->isAwaitingDecision());
+        self::assertSame($nameMatch, $match->toArray());
+        self::assertNull($signer->getIdentityMatch());
+        self::assertNotNull($this->http->lastRequest()->getHeader('Idempotency-Key'));
+    }
+
+    public function testDecideIdentityMatchConflictWhenNothingIsPending(): void
+    {
+        $client = $this->client([self::error(409, 'invalid_request_error', 'identity_match_not_pending', 'decision')]);
+        try {
+            $client->signers->decideIdentityMatch('sgr_1', ['decision' => 'reject']);
+            self::fail('Expected ConflictException');
+        } catch (\Wthaiq\Exception\ConflictException $e) {
+            self::assertSame('identity_match_not_pending', $e->getErrorCode());
+            self::assertSame('decision', $e->getParam());
+        }
+    }
+
+    public function testNameMatchAccessorsOnEventsAndIdentityVerifications(): void
+    {
+        $client = $this->client([
+            self::json(200, ['id' => 'evt_2', 'object' => 'event', 'type' => 'signer.identity_match_hold', 'data' => ['object' => [
+                'id' => 'sgr_1', 'object' => 'signer', 'signature_request' => 'sr_1', 'identity' => ['status' => 'in_review'],
+                'identity_match' => ['state' => 'awaiting', 'verdict' => 'major', 'expected_name' => 'A B', 'document_name' => 'C D'],
+            ]]]),
+            self::json(200, ['id' => 'idv_7', 'object' => 'identity_verification', 'name_match' => ['state' => 'recorded']]),
+            self::json(200, ['id' => 'idv_8', 'object' => 'identity_verification', 'name_match' => null]),
+        ]);
+        $signer = $client->events->retrieve('evt_2')->getDataObject();
+        self::assertInstanceOf(Resource\Signer::class, $signer);
+        $held = $signer->getIdentityMatch();
+        self::assertInstanceOf(Resource\NameMatch::class, $held);
+        self::assertTrue($held->isAwaitingDecision());
+        self::assertSame('C D', $held->document_name);
+        self::assertNull($signer->getNameMatch());
+
+        self::assertSame(Resource\NameMatch::STATE_RECORDED, $client->identityVerifications->retrieve('idv_7')->getNameMatch()?->state);
+        self::assertNull($client->identityVerifications->retrieve('idv_8')->getNameMatch());
     }
 
     public function testRealNotFoundErrorsStillThrowForVerifications(): void
